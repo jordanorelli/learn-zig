@@ -1,5 +1,6 @@
 const std = @import("std");
 const page_allocator = std.heap.page_allocator;
+const format = std.fmt.format;
 
 pub fn main() !void {
     const stdin = std.io.getStdIn();
@@ -11,8 +12,12 @@ pub fn main() !void {
 
     while (true) {
         var n = stdin.read(page) catch |err| {
+            try stderr.writer().print("Error: {}\n", .{err});
             break;
         };
+        if (n <= 0) {
+            break;
+        }
         _ = try stdout.write(page[0..n]);
     }
 }
