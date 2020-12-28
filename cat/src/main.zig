@@ -18,18 +18,15 @@ fn run(mem: *Allocator) !void {
     const stderr = std.io.getStdErr();
 
     var handles = ArrayList(File).init(mem);
-    defer handles.deinit();
-
     defer {
         for (handles.items) |f| {
             f.close();
         }
+        handles.deinit();
     }
 
     var args = std.process.args();
     defer args.deinit();
-
-    var path_buffer: [std.fs.MAX_PATH_BYTES]u8 = undefined;
 
     _ = args.skip();
     while (args.next(mem)) |maybe| {
@@ -39,19 +36,10 @@ fn run(mem: *Allocator) !void {
         if (std.mem.eql(u8, arg, "-")) {
             try handles.append(stdin);
         } else {
-            const path = std.fs.realpath(arg, &path_buffer) catch |err| {
-                stderr.writer().print("Path Error with path {}: {}\n", .{ arg, err }) catch {};
+            const f = openFile(arg) catch |err| {
+                stderr.writer().print("Error with {}: {}\n", .{ arg, err }) catch {};
                 std.os.exit(1);
             };
-            const f = std.fs.openFileAbsolute(path, .{ .read = true }) catch |err| {
-                stderr.writer().print("Open Error with path {}: {}\n", .{ arg, err }) catch {};
-                std.os.exit(1);
-            };
-            const fi = try f.stat();
-            if (fi.kind != .File) {
-                stderr.writer().print("File at path {} is not regular file, is: {}\n", .{ arg, fi.kind }) catch {};
-                std.os.exit(1);
-            }
             try handles.append(f);
         }
     }
@@ -79,4 +67,17 @@ fn dump(page: []u8, f: File) !void {
         }
         _ = try stdout.write(page[0..n]);
     }
+}
+
+const BadFileType = error.BadFileType;
+
+var path_buffer: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+fn openFile(rel: []u8) !File {
+    const path = try std.fs.realpath(rel, &path_buffer);
+    const f = try std.fs.openFileAbsolute(path, .{ .read = true });
+    const fi = try f.stat();
+    if (fi.kind != .File) {
+        return BadFileType;
+    }
+    return f;
 }
